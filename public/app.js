@@ -10,7 +10,10 @@
     answers: {},
     questions: [],
     submitted: false,
-    submissionPayload: null
+    submissionPayload: null,
+    submitting: false,
+    submissionError: "",
+    score: null
   };
 
   function escapeHtml(value) {
@@ -20,6 +23,27 @@
       .replace(/>/g, "&gt;")
       .replace(/"/g, "&quot;")
       .replace(/'/g, "&#039;");
+  }
+
+  function renderSubmissionError() {
+    app.innerHTML =
+      '<section class="state-panel error" aria-labelledby="submission-error-title">' +
+      '<h1 id="submission-error-title">ส่งแบบทดสอบไม่สำเร็จ</h1>' +
+      "<p>" +
+      escapeHtml(state.submissionError) +
+      "</p>" +
+      '<p>คำตอบของคุณยังไม่สูญหาย คุณสามารถลองส่งอีกครั้งได้</p>' +
+      '<div class="button-group">' +
+      '<button id="retry-submit" class="button button-primary" type="button">ลองส่งอีกครั้ง</button>' +
+      '<button id="return-to-quiz" class="button button-secondary" type="button">กลับไปตรวจสอบคำตอบ</button>' +
+      "</div>" +
+      "</section>";
+    document.getElementById("retry-submit").addEventListener("click", submitAttempt);
+    document.getElementById("return-to-quiz").addEventListener("click", function () {
+      state.screen = "quiz";
+      state.submissionError = "";
+      render();
+    });
   }
 
   function render() {
@@ -46,6 +70,19 @@
     }
     if (state.screen === "complete") {
       renderCompletion();
+      return;
+    }
+    if (state.screen === "submitting") {
+      app.innerHTML =
+        '<section class="state-panel" aria-labelledby="submitting-title">' +
+        '<div class="spinner" aria-hidden="true"></div>' +
+        '<h1 id="submitting-title">กำลังส่งแบบทดสอบ</h1>' +
+        "<p>โปรดรอการยืนยันจากระบบ อย่าปิดหน้านี้</p>" +
+        "</section>";
+      return;
+    }
+    if (state.screen === "submission-error") {
+      renderSubmissionError();
       return;
     }
     renderError("เกิดข้อผิดพลาด", "ไม่สามารถแสดงแบบทดสอบได้");
@@ -237,6 +274,15 @@
       '<div class="completion-icon" aria-hidden="true">✓</div>' +
       '<h1 id="completion-title">ส่งแบบทดสอบเรียบร้อยแล้ว</h1>' +
       "<p>บันทึกการส่งแบบทดสอบของคุณเรียบร้อยแล้ว</p>" +
+      (state.score
+        ? "<p>คะแนน: " +
+          state.score.correctAnswers +
+          " / " +
+          state.score.maximumScore +
+          " (" +
+          state.score.percentage +
+          "%)</p>"
+        : "") +
       '<p class="attempt-reference">รหัสการทำแบบทดสอบ: ' +
       escapeHtml(state.attemptId) +
       "</p>" +
@@ -285,6 +331,8 @@
     state.answers = {};
     state.submitted = false;
     state.submissionPayload = null;
+    state.submissionError = "";
+    state.score = null;
     if (!state.questions.length) {
       renderError("ไม่พบคำถาม", "ยังไม่มีข้อมูลคำถามสำหรับแบบทดสอบนี้");
       return;
@@ -318,10 +366,17 @@
   }
 
   function submitAttempt() {
-    if (state.submitted || state.screen !== "confirm") {
+    if (state.submitted || state.submitting) {
       return;
     }
-    state.submitted = true;
+    var endpoint =
+      window.QCM_CONFIG && window.QCM_CONFIG.submissionEndpoint;
+    if (!endpoint) {
+      state.submissionError = "ยังไม่ได้ตั้งค่า URL สำหรับส่งข้อมูลไปยัง Google Apps Script";
+      state.screen = "submission-error";
+      renderSubmissionError();
+      return;
+    }
     state.submissionPayload = {
       attemptId: state.attemptId,
       studentId: state.studentId,
@@ -332,8 +387,74 @@
         };
       })
     };
-    state.screen = "complete";
+    state.submitting = true;
+    state.submissionError = "";
+    state.screen = "submitting";
     render();
+    submitWithIframe(endpoint, state.submissionPayload);
+  }
+
+  function submitWithIframe(endpoint, submission) {
+    var requestToken = createAttemptId();
+    var frameName = "qcm-submit-" + requestToken.replace(/[^a-zA-Z0-9]/g, "");
+    var iframe = document.createElement("iframe");
+    var form = document.createElement("form");
+    var input = document.createElement("input");
+    iframe.name = frameName;
+    iframe.title = "พื้นที่ส่งแบบทดสอบ";
+    iframe.hidden = true;
+    form.method = "POST";
+    form.action = endpoint;
+    form.target = frameName;
+    form.hidden = true;
+    input.type = "hidden";
+    input.name = "payload";
+    input.value = JSON.stringify({
+      requestToken: requestToken,
+      submission: submission
+    });
+    form.appendChild(input);
+    document.body.appendChild(iframe);
+    document.body.appendChild(form);
+
+    var timeout = window.setTimeout(function () {
+      finishSubmission(false, "หมดเวลารอการยืนยันจาก Google Apps Script");
+      cleanup();
+    }, 30000);
+    function cleanup() {
+      window.clearTimeout(timeout);
+      window.removeEventListener("message", receiveMessage);
+      form.remove();
+      iframe.remove();
+    }
+    function receiveMessage(event) {
+      if (event.source !== iframe.contentWindow) return;
+      var message = event.data;
+      if (!message || message.type !== "qcm-submit-result") return;
+      if (!message.data || message.data.requestToken !== requestToken) return;
+      cleanup();
+      if (message.data.success) {
+        finishSubmission(true, message.data.result);
+      } else {
+        finishSubmission(false, message.data.error || "Google Apps Script ปฏิเสธการส่งข้อมูล");
+      }
+    }
+    window.addEventListener("message", receiveMessage);
+    form.submit();
+  }
+
+  function finishSubmission(success, result) {
+    state.submitting = false;
+    if (success) {
+      state.submitted = true;
+      state.score = result;
+      state.screen = "complete";
+      render();
+      return;
+    }
+    state.submissionError = result;
+    state.screen = "submission-error";
+    renderSubmissionError();
   }
 
   function validateQuestionData(data) {
