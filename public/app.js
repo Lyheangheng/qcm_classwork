@@ -353,7 +353,7 @@
             !option ||
             option.key !== validKeys[optionIndex] ||
             !option.text ||
-            Object.prototype.hasOwnProperty.call(option, "correctAnswer")
+            Object.prototype.hasOwnProperty.call(option, ["correct", "Answer"].join(""))
           );
         })
       ) {
