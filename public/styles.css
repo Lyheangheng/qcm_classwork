@@ -181,6 +181,14 @@ h2 {
   font-weight: 700;
 }
 
+.progress-counts {
+  margin-top: 8px;
+  margin-bottom: 8px;
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  font-weight: 400;
+}
+
 .progress-track {
   height: 8px;
   overflow: hidden;
@@ -245,6 +253,40 @@ h2 {
 
 .confirmation p:last-child {
   margin-bottom: 0;
+}
+
+.confirmation.warning {
+  border-color: #e8b44f;
+  background: #fffaf0;
+}
+
+.confirmation.success-message {
+  border-color: #9bd5b8;
+  background: #f0fbf5;
+}
+
+.confirmation-note {
+  margin-top: 18px;
+  color: var(--text-muted);
+}
+
+.unanswered-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.question-link {
+  min-height: 38px;
+  padding: 6px 12px;
+  font-size: 0.9rem;
+}
+
+.attempt-reference {
+  color: var(--text-muted);
+  font-size: 0.9rem;
+  overflow-wrap: anywhere;
 }
 
 .state-panel {
