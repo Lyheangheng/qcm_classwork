@@ -230,5 +230,5 @@ function htmlResponse_(result) {
     "<!doctype html><script>window.parent.postMessage({type:'qcm-submit-result',data:" +
       message +
       "}, '*');</script>"
-  );
+  ).setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);
 }
