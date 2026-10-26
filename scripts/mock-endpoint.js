@@ -26,7 +26,7 @@ const server = http.createServer((request, response) => {
     };
     response.writeHead(200, { "Content-Type": "text/html; charset=utf-8" });
     response.end(
-      "<script>window.parent.postMessage({type:'qcm-submit-result',data:" +
+      "<script>(window.opener || window.parent).postMessage({type:'qcm-submit-result',data:" +
         JSON.stringify(result).replace(/</g, "\\u003c") +
         "}, '*');</script>"
     );

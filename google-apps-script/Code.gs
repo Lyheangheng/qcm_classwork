@@ -227,7 +227,7 @@ function safeErrorMessage_(error) {
 function htmlResponse_(result) {
   const message = JSON.stringify(result).replace(/</g, "\\u003c");
   return HtmlService.createHtmlOutput(
-    "<!doctype html><script>window.parent.postMessage({type:'qcm-submit-result',data:" +
+    "<!doctype html><script>(window.opener || window.parent).postMessage({type:'qcm-submit-result',data:" +
       message +
       "}, '*');</script>"
   ).setXFrameOptionsMode(HtmlService.XFrameOptionsMode.ALLOWALL);

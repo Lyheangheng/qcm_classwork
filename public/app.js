@@ -391,18 +391,23 @@
     state.submissionError = "";
     state.screen = "submitting";
     render();
-    submitWithIframe(endpoint, state.submissionPayload);
+    submitWithWindow(endpoint, state.submissionPayload);
   }
 
-  function submitWithIframe(endpoint, submission) {
+  function submitWithWindow(endpoint, submission) {
     var requestToken = createAttemptId();
     var frameName = "qcm-submit-" + requestToken.replace(/[^a-zA-Z0-9]/g, "");
-    var iframe = document.createElement("iframe");
+    var responseWindow = window.open(
+      "about:blank",
+      frameName,
+      "popup,width=1,height=1,left=-1000,top=-1000"
+    );
     var form = document.createElement("form");
     var input = document.createElement("input");
-    iframe.name = frameName;
-    iframe.title = "พื้นที่ส่งแบบทดสอบ";
-    iframe.hidden = true;
+    if (!responseWindow) {
+      finishSubmission(false, "เบราว์เซอร์บล็อกหน้าต่างสำหรับส่งแบบทดสอบ กรุณาอนุญาตป๊อปอัปแล้วลองใหม่");
+      return;
+    }
     form.method = "POST";
     form.action = endpoint;
     form.target = frameName;
@@ -414,7 +419,6 @@
       submission: submission
     });
     form.appendChild(input);
-    document.body.appendChild(iframe);
     document.body.appendChild(form);
 
     var timeout = window.setTimeout(function () {
@@ -425,10 +429,12 @@
       window.clearTimeout(timeout);
       window.removeEventListener("message", receiveMessage);
       form.remove();
-      iframe.remove();
+      if (!responseWindow.closed) {
+        responseWindow.close();
+      }
     }
     function receiveMessage(event) {
-      if (event.source !== iframe.contentWindow) return;
+      if (event.source !== responseWindow) return;
       var message = event.data;
       if (!message || message.type !== "qcm-submit-result") return;
       if (!message.data || message.data.requestToken !== requestToken) return;
